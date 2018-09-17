@@ -1,0 +1,575 @@
+var _ = lib.Underscore.require();
+
+function callExample(){
+    const SIMPLE_EXAMPLE = true;
+
+    
+    if ( SIMPLE_EXAMPLE ){
+        var htmlObject = new lib.HTML.htmlTable( "incidents", "current.phase=\"p0.3\"", [ "incident.id", "description", "affected.item", "current.phase", "open.time" ], 3,);
+        return htmlObject.getHTML();
+    } else {
+        var htmlObject = new lib.HTML.htmlTable( "dept", "true", [ "dept.name", "company" ], 10 );
+        var css = htmlObject.getStyle( "blur" );
+        var header1 = htmlObject.getTableHeader( [ "Dept", "Company" ], [ 80, 20 ] );
+        var body1 = htmlObject.getTableBody();
+        var bottom1 = htmlObject.getTableBottom();
+        var header2 = htmlObject.getTableHeader( [ "ID", "Name" ], [ 20, 80 ] );
+        var body2 = htmlObject.getTableBody( "company", "true", [ "customer.id", "company" ] );
+        var bottom2 = htmlObject.getTableBottom();
+        return css + header1 + body1 + bottom1 + header2 + body2 + bottom2;
+    }
+}
+
+function htmlTable( dataTable, dataQuery, dataFields, maxRows, arrColumns, arrSizePercentColumns, css, dataOrderByFields, dataOrderSequence ){
+    try{
+        const MAX_ROWS = 100;
+        const NULL_SYMBOL = "-";
+        const DEFAULT_CSS = "blur";
+        const DEFAULT_TABLE_STYLE = tableStyle[ DEFAULT_CSS ];
+        const MAX_LENGTH_STRING_FOR_ARRAY = 170;
+        const BOOL_TRUE = "Да";
+        const BOOL_FALSE = "Нет";
+        const JOIN_SCFILE_ARRAY_SYMBOL = " ";
+
+        var datadictQuery = "name=\"" + dataTable + "\"";
+        var datadictROFields = [ "fields", "captions", "reference.table", "globallist" ];
+        var datadict = new lib.seUtils.selectObj( "datadict", datadictQuery, true, datadictROFields );
+        datadict.getFirst();
+
+        maxRows = maxRows == null || maxRows == undefined ? MAX_ROWS : maxRows;
+    } catch ( ex ){
+        print( exceptionMessages[ "htmlTable" ], ex );
+    }
+
+    this.getHTML = function(){
+		var html = "";
+
+		html += this.getStyle( css );
+		html += this.getTableHeader();
+		html += this.getTableBody();
+		html += this.getTableBottom();
+		return html;
+    }
+
+    this.getStyle = function( newCss ){
+        try{
+            if ( newCss != null && newCss != undefined && styleObj[ newCss ] != null ){
+                css = newCss;
+            } else {
+            	css = css == null || css == undefined || styleObj[ css ] == null ? DEFAULT_CSS : css;
+            }
+            return styleObj[ css ];
+        } catch( ex ){
+            print( exceptionMessages[ "getStyle" ], ex );
+            return styleObj[ DEFAULT_CSS ];
+        }
+    };
+
+    this.getTableHeader = function( newArrColumns, newArrSizePercentColumns ){
+        try{
+            if ( newArrColumns != null && newArrColumns != undefined ){
+                this.arrColumns = newArrColumns;
+            }
+
+            if ( newArrSizePercentColumns != null && newArrSizePercentColumns != undefined ){
+                this.arrSizePercentColumns = newArrSizePercentColumns;
+            }
+
+            this.arrColumns = newArrColumns != null && newArrColumns != undefined ? newArrColumns : arrColumns
+            this.arrSizePercentColumns = newArrSizePercentColumns == undefined ? this.arrSizePercentColumns : newArrSizePercentColumns;
+            var htmlHeader = "";
+            var styleStr = "valign=top CLASS=\"evenRow\"";
+
+            var tableStyleClass = tableStyle[ css ] == null ? DEFAULT_TABLE_STYLE : tableStyle[ css ];
+
+            htmlHeader += "<TABLE class=\"" + tableStyleClass + "\" cellpadding=\"0\" cellspacing=\"1\" width=\"100%\">";
+            htmlHeader += "<TR " + styleStr + ">";
+
+            if ( this.arrSizePercentColumns == null || this.arrSizePercentColumns == undefined ){
+                var percent = 100/dataFields.length;
+                this.arrSizePercentColumns = [];
+                for ( var i = 0; i < dataFields.length; i++ )
+                {
+                    this.arrSizePercentColumns.push( percent );
+                }
+            }
+
+            if ( this.arrColumns == null || this.arrColumns == undefined ){
+                this.arrColumns = [];
+                for ( var i = 0; i < dataFields.length; i++ ){
+                    this.arrColumns.push( datadict.record[ "captions" ][ funcs.index( dataFields[ i ], datadict.record[ "fields" ] ) - 1 ] );
+                }
+            }
+
+            for ( var i = 0; i < dataFields.length; i++ ){
+                htmlHeader += "<TH width=" + this.arrSizePercentColumns[ i ] + "%>" + this.arrColumns[ i ] + "</TH>";
+            }
+            htmlHeader += "</TR>";
+            return htmlHeader;
+        } catch ( ex ){
+            print( exceptionMessages[ "getTableHeader" ], ex );
+            return  "<TABLE class=\"" + DEFAULT_TABLE_STYLE + "\" cellpadding=\"0\" cellspacing=\"1\" width=\"100%\">\
+                    <TR valign=top CLASS=\"evenRow\"><TH>Не удалось получить названия столбцов</TH></TR>";
+        }
+    }
+
+    this.getTableBody = function( newDataTable, newDataQuery, newDataFields, newDataOrderByFields, newDataOrderSequence ){
+        try{
+            this.dataTable = newDataTable == undefined ? dataTable : newDataTable;
+            this.dataQuery = newDataQuery == undefined ? dataQuery : newDataQuery;
+            this.dataFields = newDataFields == undefined ? dataFields : newDataFields;
+            this.dataOrderByFields = newDataOrderByFields == undefined ? dataOrderByFields : newDataOrderByFields;
+            this.dataOrderSequence = newDataOrderSequence == undefined ? dataOrderSequence : newDataOrderSequence;
+
+            var htmlBody = "";
+            var rowStyle = "oddRow";
+            var argumentsForRow = "";
+            var i = 0;
+            
+            var table = new lib.seUtils.selectObj( this.dataTable, this.dataQuery, true, this.dataFields, this.dataOrderByFields, 
+                                                    this.dataOrderSequence );
+            var fTable = table.getFirst();
+
+            while( fTable ){
+                rowStyle = rowStyle == "oddRow" ? "evenRow" : "oddRow";
+                var rowStyleDeclaration = "valign=top CLASS=\"" + rowStyle + "\"";
+                if ( i == maxRows ){
+                    var queryEnd = this.dataQuery.replace( /\"/g, "&quot;" );
+                    htmlBody += this.getTableRowEnd( rowStyleDeclaration, lib.HPCHtmlEngine.getSimpleLinkToRecord( "Просмотреть все результаты", this.dataTable, queryEnd ) );
+                    break;
+                }
+                argumentsForRow = this.generateArgumentsForRow( table, rowStyleDeclaration );
+                htmlBody += this.getTableRowArr( argumentsForRow );
+                i++;
+                fTable = table.getNext();
+            }
+            return htmlBody;
+        } catch ( ex ){
+            print( exceptionMessages[ "getTableBody" ], ex );
+            return "</TABLE>";
+	    }
+    }
+
+    this.getTableBottom = function(){
+        return "</TABLE>";
+    }
+
+    this.generateArgumentsForRow = function( table, rowStyleDeclaration ){
+        try{
+            var arrTableUniqueKeys = lib.tableFunctions.getUniqueKey( this.dataTable );
+            var fieldsValue = [];
+            var localizationMap = [];
+            var argumentsForRowBuild = [];
+            var queryRecord = "true";
+
+            for ( var keyNumber = 0; keyNumber < arrTableUniqueKeys.length(); keyNumber++ ){
+                queryRecord += " and " + arrTableUniqueKeys[ keyNumber ] + "=&quot;" + table.record[ arrTableUniqueKeys[ keyNumber ] ] + "&quot;";
+            }
+            for ( var j = 0; j < dataFields.length; j++ ){
+                fieldsValue.push( table.record[ this.dataFields[ j ] ] );
+            }
+            localizationMap = this.getLocalizationTableForData( this.dataFields, fieldsValue ); 
+
+            argumentsForRowBuild.push( rowStyleDeclaration );
+            argumentsForRowBuild.push( lib.HPCHtmlEngine.getSimpleLinkToRecord( localizationMap[ 0 ][ 1 ], this.dataTable, queryRecord ) );
+            for ( var i = 1; i < dataFields.length; i++ ){        
+                argumentsForRowBuild.push( localizationMap[ i ][ 1 ] );
+            }
+            return argumentsForRowBuild;
+        } catch ( ex ){
+            print( exceptionMessages[ "generateArgumentsForRow" ], ex );
+            return [];
+        }
+    }
+
+    this.getLocalizationTableForData = function( dataFields, fieldsValue ){
+        try{
+            var localizationMap = [];
+            var localizationValue = null;
+            
+            for ( var i = 0; i < dataFields.length; i++ ){ 
+                var datadictQuery = "name=\"" + this.dataTable + "\"";
+                var datadict = new lib.seUtils.selectObj( "datadict", datadictQuery, true, this.datadictROFields );
+                datadict.getFirst();        
+                var dataFieldIndex = _.indexOf( lib.seUtils.scfileArrayToJSArray( datadict.record[ "fields" ] ), dataFields[ i ] );
+                
+                if ( datadict.record[ "reference.table" ][ dataFieldIndex ] != null ){
+                    var datadictLocalizationQuery = "name=\"" + datadict.record[ "reference.table" ][ dataFieldIndex ] + "\"";
+                    var datadictLocalizationROFields = [ "display.field", "unique.key" ];
+                    var datadictLocalization = new lib.seUtils.selectObj( "datadict", datadictLocalizationQuery, true, datadictLocalizationROFields );
+                    datadictLocalization.getFirst();
+                    var localizationField = datadictLocalization.record[ "display.field" ];
+                    var localizationTableQuery = datadictLocalization.record[ "unique.key" ][ 0 ] + "=\"" + fieldsValue[ i ] + "\"" ;
+                    var localizationTable = lib.seUtils.selectObj( datadict.record[ "reference.table" ][ dataFieldIndex ], localizationTableQuery,
+                                                                    true, [ localizationField ] );
+                    localizationTable.getFirst();
+                    localizationValue = localizationTable.record[ localizationField ];
+                    localizationMap.push( [ fieldsValue[ i ], funcs.nullsub( localizationValue, NULL_SYMBOL ) ] );
+                } else if ( datadict.record[ "globallist" ][ dataFieldIndex ] != null ){
+                    localizationValue = lib.tableFunctions.getGlDisplayValue( datadict.record[ "globallist" ][ dataFieldIndex ], fieldsValue[ i ] );
+                    localizationMap.push( [ fieldsValue[ i ], funcs.nullsub( localizationValue, NULL_SYMBOL ) ] );
+                } else{
+                    localizationMap.push( [ fieldsValue[ i ], this.convertValueForDisplay( fieldsValue[ i ] ) ] );
+                }
+            }
+            return localizationMap;
+        } catch ( ex ){
+            print( exceptionMessages[ "generateArgumentsForRow" ], ex );
+            return [[]];
+        }
+    }
+
+    this.convertValueForDisplay = function( fieldValue ){
+        try{
+            var type = funcs.type( fieldValue );
+
+            if ( type === 3 ){
+                return funcs.str( funcs.nullsub( fieldValue, NULL_SYMBOL ) );
+            } else if ( type === 4 ){
+                return fieldValue === true ? BOOL_TRUE : BOOL_FALSE;
+            } else if ( type === 8 ){
+                return funcs.nullsub( this.removeHTMLTagsFromString( fieldValue.join( JOIN_SCFILE_ARRAY_SYMBOL ) ).substr( 0, MAX_LENGTH_STRING_FOR_ARRAY ), NULL_SYMBOL );
+            } else{
+                return funcs.nullsub( funcs.str( this.removeHTMLTagsFromString( fieldValue ) ), NULL_SYMBOL );
+            }
+        } catch ( ex ){
+            print( exceptionMessages[ "convertValueForDisplay" ], ex );
+            return NULL_SYMBOL;
+        }
+    }
+
+    this.getTableRowEnd = function( styleStr ){
+        try{
+            var html = "";
+
+            if ( funcs.index( "class=", funcs.tolower( styleStr ) ) > 0 ){
+                html = "<TR " + styleStr + ">";
+            }
+            else{
+                html = "<TR><TD colspan=\"" + dataFields.length + "\">" + styleStr + "</TD>";
+            }
+
+            for ( var i = 1; i < arguments.length; i++ ){  
+                html += "<TD colspan=\"" + dataFields.length + "\">" + arguments[ i ] + "</TD>";
+            }
+            return html + "</TR>";
+        } catch ( ex ){
+            print( exceptionMessages[ "getTableRowEnd" ], ex );
+            return null;
+        }
+    }
+
+    this.getTableRowArr = function( styleStr ){
+        try{
+            var html = "";
+
+            if ( funcs.index( "class=", funcs.tolower( styleStr[ 0 ] ) ) > 0 ){
+                html = "<TR " + styleStr[ 0 ] + ">";
+            }
+            else{
+                html = "<TR><TD>" + styleStr[ 0 ] + "</TD>";
+            }
+
+            for ( var i = 1; i < styleStr.length; i++ ){
+                html += "<TD>" + styleStr[ i ] + "</TD>";
+            }
+            return html + "</TR>";
+        } catch ( ex ){
+            print( exceptionMessages[ "getTableRowArr" ], ex );
+            return null;
+        }
+    }
+
+    this.removeHTMLTagsFromString = function( string ){
+        return string.replace(/<[^>]+>/g,'')
+    }
+}
+
+const exceptionMessages = {
+    getStyle: "Ошибка при получении стиля таблицы, ScriptLibrary x5HTML, класс htmlTable, метод getStyle. Ошибка:",
+    getTableHeader: "Ошибка при получении Header таблицы, ScriptLibrary x5HTML, класс htmlTable, метод getTableHeader. Ошибка:",
+    getTableBody: "Ошибка при получении тела таблицы, ScriptLibrary x5HTML, класс htmlTable, метод getTableBody. Ошибка:",
+    generateArgumentsForRow: "Ошибка при получении аргументов для строк таблицы, ScriptLibrary x5HTML, класс htmlTable, метод generateArgumentsForRow. Ошибка:",
+    getLocalizationTableForData: "Ошибка при получении локализованных значений для строк таблицы, ScriptLibrary x5HTML, класс htmlTable, метод getLocalizationTableForData. Ошибка:",
+    getTableRowArr: "Ошибка при получении строки таблицы, ScriptLibrary x5HTML, класс htmlTable, метод getTableRowArr. Ошибка:",
+    getTableRowEnd: "Ошибка при получении последней строки таблицы, ScriptLibrary x5HTML, класс htmlTable, метод getTableRowEnd. Ошибка:",
+    convertValueForDisplay: "Ошибка при получении отображаемых данных строки таблицы, ScriptLibrary x5HTML, класс htmlTable, метод convertValueForDisplay. Ошибка:",
+    htmlTable: "Ошибка при построении таблицы, ScriptLibrary x5HTML, класс htmlTable, метод htmlTable. Ошибка:"
+};
+
+const tableStyle = {
+    basic: "listTable",
+    blur: "table_blur",
+    blue: "table_dark",
+    simple: "simple-little-table"
+};
+
+const styleObj = {
+	basic: "<STYLE>\
+	.listTable{\
+	  font-family: Verdana, Arial, Helvetica, sans-serif;\
+	  margin:0px;\
+	  padding:0px;\
+	  font-size: 11px;\
+	  border-top: #ccc 0px solid;\
+	  border-bottom: #ccc 0px solid;\
+	  border-right: #ccc 0px solid;\
+	  color: #000000;\
+	  background: #ffffff;\
+	}\
+	\
+	.listTable TD{\
+	  border-left: #ccc 0px solid;\
+	  font-weight: normal;\
+	  padding:1px 2px 1px 2px;\
+	  color: #000000;\
+	  line-height: 12px;\
+	}\
+	\
+	.listTableEnd {\
+	  border-right: #ccc 0px solid;\
+	}\
+	\
+	.listTable TH{\
+	  border-top: #ccc 0px solid;\
+	  border-left: #ccc 0px solid;\
+	  font-weight: bold;\
+	  padding:0px;\
+	  background: #E0E0E0;\
+	  text-align: left;\
+	}\
+	\
+	.oddRow{\
+	  BACKGROUND: #edf3fe;\
+	  COLOR: #0000cc\
+	}\
+	\
+	.odRow{\
+	  BACKGROUND: #ffdea2;\
+	  COLOR: #0000cc\
+	}\
+	\
+	.evenRow{\
+	  BACKGROUND: #ffffff;\
+	  COLOR: #0000cc\
+	}\
+	.boldRow{\
+	  BACKGROUND: #cccfff;\
+	  COLOR: #cccfff\
+	}\
+	.listTable A{\
+	  color: #0000CC;\
+	  cursor: pointer;\
+	  text-decoration: none;\
+	}\
+	\
+	.listTable A:HOVER{\
+	  text-decoration: underline;\
+	  color: #0000FF;\
+	}\
+	\
+	.resultLink{\
+	  font-weight:bold;\
+	}\
+	\
+	.hithighlight{\
+	  FONT-WEIGHT: bold;\
+	}\
+	\
+	.resultHeading{\
+	  PADDING: 2px;\
+	  TEXT-ALIGN:left;\
+	  display: block;\
+	}\
+	.resultTable{\
+	  font-size: 11px;\
+	  PADDING: 2px;\
+	   TEXT-ALIGN:left;\
+	  display: block;\
+	  scrolling:auto;\
+	}\
+	\
+	.label{\
+	  TEXT-ALIGN:left;\
+	}\
+    </STYLE>",
+    blur: "<STYLE>\
+    .table_blur {\
+        background: #f5ffff;\
+        border-collapse: collapse;\
+        text-align: left;\
+        font-size: 11px;\
+      }\
+      .table_blur th {\
+        border-top: 1px solid #777777;\
+        border-bottom: 1px solid #777777;\
+        box-shadow: inset 0 1px 0 #999999, inset 0 -1px 0 #999999;\
+        background: linear-gradient(#9595b6, #5a567f);\
+        color: white;\
+        padding: 5px 5px;\
+        position: relative;\
+      }\
+      .table_blur th:after {\
+        content: \"\";\
+        display: block;\
+        position: absolute;\
+        left: 0;\
+        top: 25%;\
+        height: 25%;\
+        width: 100%;\
+        background: linear-gradient(rgba(255, 255, 255, 0), rgba(255,255,255,.08));\
+      }\
+      .table_blur tr:nth-child(odd) {\
+        background: #ebf3f9;\
+      }\
+      .table_blur th:first-child {\
+        border-left: 1px solid #777777;	\
+        border-bottom:  1px solid #777777;\
+        box-shadow: inset 1px 1px 0 #999999, inset 0 -1px 0 #999999;\
+      }\
+      .table_blur th:last-child {\
+        border-right: 1px solid #777777;\
+        border-bottom:  1px solid #777777;\
+        box-shadow: inset -1px 1px 0 #999999, inset 0 -1px 0 #999999;\
+      }\
+      .table_blur td {\
+        border: 1px solid #e3eef7;\
+        padding: 1px 1px;\
+        position: relative;\
+        transition: all 0.5s ease;\
+      }\
+      .table_blur tbody:hover td {\
+        color: transparent;\
+        text-shadow: 0 0 3px #a09f9d;\
+      }\
+      .table_blur tbody:hover tr:hover td {\
+        color: #444444;\
+        text-shadow: none;\
+      }</STYLE>",
+    blue: "<STYLE>\
+    .table_dark {\
+	  font-family: Verdana, Arial, Helvetica, sans-serif;\
+	  margin:0px;\
+        font-size: 11px;\
+        text-align: left;\
+        border-collapse: collapse;\
+        background: #B0E0E6;\
+    }\
+    .table_dark th {\
+        color: #2D2289;\
+        border-bottom: 1px solid #37B5A5;\
+        padding: 5px 1px 5px 2px;\
+    }\
+    .table_dark td {\
+        color: #01010C;\
+        border-bottom: 1px solid #37B5A5;\
+        border-right:1px solid #37B5A5;\
+        padding: 1px 1px;\
+    }\
+    .table_dark tr:last-child td {\
+        border-bottom: none;\
+    }\
+    .table_dark td:last-child {\
+        border-right: none;\
+    }\
+    .table_dark tr:hover td {\
+        text-decoration: underline;\
+    }</STYLE>",
+    simple:"<STYLE>\
+    .simple-little-table {\
+        font-family:Arial, Helvetica, sans-serif;\
+        color:#666;\
+        font-size:11px;\
+        text-shadow: 1px 1px 0px #fff;\
+        background:#eaebec;\
+        margin:0px;\
+        border:#ccc 1px solid;\
+        border-collapse:separate;\
+        -moz-border-radius:3px;\
+        -webkit-border-radius:3px;\
+        border-radius:3px;\
+        -moz-box-shadow: 0 1px 2px #d1d1d1;\
+        -webkit-box-shadow: 0 1px 2px #d1d1d1;\
+        box-shadow: 0 1px 2px #d1d1d1;\
+    }\
+    .simple-little-table th {\
+        font-weight:bold;\
+        padding:1px 1px 1px 1px;\
+        border-top:1px solid #fafafa;\
+        border-bottom:1px solid #e0e0e0;\
+        background: #ededed;\
+        background: -webkit-gradient(linear, left top, left bottom, from(#ededed), to(#ebebeb));\
+        background: -moz-linear-gradient(top,  #ededed,  #ebebeb);\
+    }\
+    .simple-little-table th:first-child{\
+        text-align: left;\
+        padding-left:1px;\
+    }\
+    .simple-little-table tr:first-child th:first-child{\
+        -moz-border-radius-topleft:3px;\
+        -webkit-border-top-left-radius:3px;\
+        border-top-left-radius:3px;\
+    }\
+    .simple-little-table tr:first-child th:last-child{\
+        -moz-border-radius-topright:3px;\
+        -webkit-border-top-right-radius:3px;\
+        border-top-right-radius:3px;\
+    }\
+    .simple-little-table tr{\
+        text-align: left;\
+        padding-left:1px;\
+    }\
+    .simple-little-table tr td:first-child{\
+        text-align: left;\
+        padding-left:1px;\
+        border-left: 0;\
+    }\
+    .simple-little-table tr td {\
+        padding:1px;\
+        border-top: 1px solid #ffffff;\
+        border-bottom:1px solid #e0e0e0;\
+        border-left: 1px solid #e0e0e0;\
+        background: #fafafa;\
+        background: -webkit-gradient(linear, left top, left bottom, from(#fbfbfb), to(#fafafa));\
+        background: -moz-linear-gradient(top,  #fbfbfb,  #fafafa);\
+    }\
+    .simple-little-table tr:nth-child(even) td{\
+        background: #f6f6f6;\
+        background: -webkit-gradient(linear, left top, left bottom, from(#f8f8f8), to(#f6f6f6));\
+        background: -moz-linear-gradient(top,  #f8f8f8,  #f6f6f6);\
+    }\
+    .simple-little-table tr:last-child td{\
+        border-bottom:0;\
+    }\
+    .simple-little-table tr:last-child td:first-child{\
+        -moz-border-radius-bottomleft:3px;\
+        -webkit-border-bottom-left-radius:3px;\
+        border-bottom-left-radius:3px;\
+    }\
+    .simple-little-table tr:last-child td:last-child{\
+        -moz-border-radius-bottomright:3px;\
+        -webkit-border-bottom-right-radius:3px;\
+        border-bottom-right-radius:3px;\
+    }\
+    .simple-little-table tr:hover td{\
+        background: #f2f2f2;\
+        background: -webkit-gradient(linear, left top, left bottom, from(#f2f2f2), to(#f0f0f0));\
+        background: -moz-linear-gradient(top,  #f2f2f2,  #f0f0f0);\
+    }\
+    .simple-little-table a:link {\
+        color: #666;\
+        font-weight: bold;\
+        text-decoration:none;\
+    }\
+    .simple-little-table a:visited {\
+        color: #999999;\
+        font-weight:bold;\
+        text-decoration:none;\
+    }\
+    .simple-little-table a:active,\
+    .simple-little-table a:hover {\
+        color: #bd5a35;\
+        text-decoration:underline;\
+    }\
+    </STYLE>"
+};
